@@ -734,39 +734,47 @@ const FORMS={
 
 // ── Form render ──
 function pr(label,prev){return{p:label,u:prev||''};}
-function buildFormHTML(mid){
+function escAttr(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/"/g,'&quot;');}
+function buildFormHTML(mid,vals){
+  vals=vals||{};
   const def=FORMS[mid];
   if(!def)return'<div style="padding:2rem;text-align:center;color:var(--gray)">Form not available for this machine</div>';
   let html='';let i=0;
   while(i<def.sections.length){
     const sec=def.sections[i];
-    if(sec.type==='material'){html+=buildMatHTML(sec.mats);i++;continue;}
-    if(sec.full){html+=`<div class="pcc-tables full">${buildSecHTML(sec)}</div>`;i++;continue;}
+    if(sec.type==='material'){html+=buildMatHTML(sec.mats,vals);i++;continue;}
+    if(sec.full){html+=`<div class="pcc-tables full">${buildSecHTML(sec,vals)}</div>`;i++;continue;}
     const nxt=def.sections[i+1];
-    if(nxt&&!nxt.type&&!nxt.full){html+=`<div class="pcc-tables">${buildSecHTML(sec)}${buildSecHTML(nxt)}</div>`;i+=2;}
-    else{html+=`<div class="pcc-tables full">${buildSecHTML(sec)}</div>`;i++;}
+    if(nxt&&!nxt.type&&!nxt.full){html+=`<div class="pcc-tables">${buildSecHTML(sec,vals)}${buildSecHTML(nxt,vals)}</div>`;i+=2;}
+    else{html+=`<div class="pcc-tables full">${buildSecHTML(sec,vals)}</div>`;i++;}
   }
   return html;
 }
-function buildSecHTML(sec){
+function buildSecHTML(sec,vals){
+  vals=vals||{};
   return`<div class="pcc-table-block">
     <div class="pcc-table-head">${sec.title}</div>
     <table class="pcc-table">
       <tr><th>Parameter</th><th>Value</th></tr>
-      ${sec.rows.map(r=>`<tr><td>${r.p}</td><td><input type="text" data-param="${r.p}" placeholder=""></td></tr>`).join('')}
+      ${sec.rows.map(r=>`<tr><td>${r.p}</td><td><input type="text" data-param="${r.p}" value="${escAttr(vals[r.p])}" placeholder=""></td></tr>`).join('')}
     </table>
   </div>`;
 }
 let matRowCount=3; // 3 rows are rendered by default per form (indices 0,1,2)
-function matRowHTML(idx){
-  return`<tr><td><input type="text" data-param="MAT_${idx}_NAME" placeholder="Material name" style="width:100%;border:none;outline:none;font-size:12px;background:transparent;font-family:inherit"></td><td><input type="number" data-param="MAT_${idx}_A" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_B" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_C" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_PCT" placeholder="%" min="0" max="100"></td></tr>`;
+function matRowHTML(idx,vals){
+  vals=vals||{};
+  return`<tr><td><input type="text" data-param="MAT_${idx}_NAME" value="${escAttr(vals['MAT_'+idx+'_NAME'])}" placeholder="Material name" style="width:100%;border:none;outline:none;font-size:12px;background:transparent;font-family:inherit"></td><td><input type="number" data-param="MAT_${idx}_A" value="${escAttr(vals['MAT_'+idx+'_A'])}" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_B" value="${escAttr(vals['MAT_'+idx+'_B'])}" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_C" value="${escAttr(vals['MAT_'+idx+'_C'])}" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_PCT" value="${escAttr(vals['MAT_'+idx+'_PCT'])}" placeholder="%" min="0" max="100"></td></tr>`;
 }
-function buildMatHTML(mats){
+function buildMatHTML(mats,vals){
+  vals=vals||{};
+  const foundIdx=Object.keys(vals).filter(k=>/^MAT_\d+_NAME$/.test(k)).map(k=>parseInt(k.match(/^MAT_(\d+)_NAME$/)[1])).sort((a,b)=>a-b);
+  const rowIdxs=foundIdx.length?foundIdx:[0,1,2];
+  matRowCount=Math.max(3,rowIdxs[rowIdxs.length-1]+1);
   return`<div class="pcc-tables full"><div class="pcc-table-block">
     <div class="pcc-table-head">MATERIAL</div>
     <table class="mat-table">
       <tr><th>Material</th><th>A</th><th>B</th><th>C</th><th>%</th></tr>
-      <tbody id="mat-table-body">${[0,1,2].map(idx=>matRowHTML(idx)).join('')}</tbody>
+      <tbody id="mat-table-body">${rowIdxs.map(idx=>matRowHTML(idx,vals)).join('')}</tbody>
     </table>
     <div class="mat-add-row" onclick="addMaterialRow()">&#10011; Add material</div>
   </div></div>`;
@@ -993,26 +1001,37 @@ function renderTpl(){
   el.innerHTML=s.templates.map((t,i)=>`
     <div class="tpl-row">
       <div class="tpl-icon">&#128196;</div>
-      <div class="tpl-info" onclick="runTpl(${i})"><div class="tpl-code">${t.code}</div><div class="tpl-date">updated ${t.date}</div></div>
+      <div class="tpl-info" onclick="tapTpl(${i})"><div class="tpl-code">${t.code}</div><div class="tpl-date">updated ${t.date}</div></div>
       <div class="tpl-acts">
-        <button class="btn btn-outline btn-sm" onclick="editTpl(${i})">&#9998;</button>
-        <button class="btn btn-outline btn-sm" onclick="delTpl(${i})">&#128465;</button>
+        <button class="btn btn-outline btn-sm" onclick="editTpl(${i})" title="Edit template">&#9998;</button>
+        <button class="btn btn-outline btn-sm" onclick="delTpl(${i})" title="Delete">&#128465;</button>
       </div>
     </div>`).join('');
 }
-function runTpl(i){const t=getMS(curM).templates[i];curMode='run';addProd(t.code,t.code,'tpl');}
-function editTpl(i){const t=getMS(curM).templates[i];curMode='edit';curPCCId={ti:i};openPCC(t.code,false);document.getElementById('main-btn').textContent='Save';}
+function tapTpl(i){
+  const t=getMS(curM).templates[i];
+  const shift=getCurrentShift(),shifts=getMSShifts(curM);
+  const entry=shifts[shift].find(p=>p.code===t.code);
+  if(entry){
+    const ri=entry.runs.findIndex(r=>r.status==='inprogress');
+    if(ri>-1){curMode='run';reopenPCC(shift,shifts[shift].indexOf(entry),ri);return;}
+  }
+  runTpl(i);
+}
+function runTpl(i){const t=getMS(curM).templates[i];curMode='run';addProd(t.code,t.code,'tpl',t.formData);}
+function editTpl(i){const t=getMS(curM).templates[i];curMode='edit';curPCCId={ti:i};openPCC(t.code,false,t.formData);document.getElementById('main-btn').textContent='Save';}
 function delTpl(i){getMS(curM).templates.splice(i,1);renderTpl();toast('Deleted','&#128465;');}
 
-function addProd(code,name,src){
+function addProd(code,name,src,seedFormData){
   const shift=getCurrentShift(),shifts=getMSShifts(curM);
   shifts[shift].forEach(e=>e.runs.forEach(r=>{if(r.status==='inprogress')r.status='completed';}));
+  const seed=seedFormData||{};
   let entry=shifts[shift].find(p=>p.code===code);let ri;
-  if(entry){entry.runs.push({status:'inprogress',time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),formData:{},operator:currentUser?currentUser.name:''});ri=entry.runs.length-1;}
-  else{shifts[shift].push({code,name,runs:[{status:'inprogress',time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),formData:{},operator:currentUser?currentUser.name:''}]});entry=shifts[shift][shifts[shift].length-1];ri=0;}
+  if(entry){entry.runs.push({status:'inprogress',time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),formData:{...seed},operator:currentUser?currentUser.name:''});ri=entry.runs.length-1;}
+  else{shifts[shift].push({code,name,runs:[{status:'inprogress',time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),formData:{...seed},operator:currentUser?currentUser.name:''}]});entry=shifts[shift][shifts[shift].length-1];ri=0;}
   curPCCId={shift,pi:shifts[shift].indexOf(entry),ri};
   apiSaveRun(todayStr(),curM,shift,entry.code,ri,entry.runs[ri]);
-  openPCC(code,src==='blank');renderProd();
+  openPCC(code,src==='blank',entry.runs[ri].formData);renderProd();
 }
 
 function renderProd(){
@@ -1064,10 +1083,13 @@ function deleteRun(sk,pi,ri){
 }
 function reopenPCC(sk,pi,ri){
   const entry=getMSShifts(curM)[sk][pi];
-  curPCCId={shift:sk,pi,ri};curMode='run';openPCC(entry.code,false);
+  const run=entry.runs[ri];
+  curPCCId={shift:sk,pi,ri};curMode='run';
+  openPCC(entry.code,false,run.formData,run.operator);
 }
 
-function openPCC(code,isBlank){
+function openPCC(code,isBlank,vals,opName){
+  vals=vals||{};
   const m=MACHINES.find(x=>x.id===curM)||{name:curM,formRef:''};
   const def=FORMS[curM]||{title:'PCC'};
   document.getElementById('pcc-back-label').textContent=m.name;
@@ -1078,10 +1100,9 @@ function openPCC(code,isBlank){
   document.getElementById('pcc-doc-fg').textContent=fg||'—';
   document.getElementById('f-fg').value=fg;
   document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
-  document.getElementById('f-op').value=currentUser?currentUser.name:'';document.getElementById('f-wo').value='';document.getElementById('f-name').value='';
+  document.getElementById('f-op').value=opName||(currentUser?currentUser.name:'');document.getElementById('f-wo').value='';document.getElementById('f-name').value='';
   document.getElementById('f-shift').value=getCurrentShift();
-  matRowCount=3;
-  document.getElementById('form-body').innerHTML=buildFormHTML(curM);
+  document.getElementById('form-body').innerHTML=buildFormHTML(curM,vals);
   const btn=document.getElementById('main-btn');
   btn.textContent=curMode==='edit'?'Save':curMode==='blank'?'Save and Run':'Run';
   showPage('pcc');
@@ -1089,12 +1110,13 @@ function openPCC(code,isBlank){
 function syncFG(){const v=document.getElementById('pcc-fg-topbar').value;document.getElementById('pcc-doc-fg').textContent=v||'—';document.getElementById('f-fg').value=v;}
 function openBlank(){curMode='blank';curPCCId=null;addProd('','Blank PCC','blank');}
 function goBack(){showMachine(curM);}
-function handleBtn(){curMode==='edit'?saveEdit():saveRun();}
+function handleBtn(){(curPCCId&&curPCCId.ti!==undefined)?saveEdit():saveRun();}
 
 function saveEdit(){
   const fg=document.getElementById('f-fg').value.trim(),s=getMS(curM);
-  if(curPCCId&&curPCCId.ti!==undefined){const t=s.templates[curPCCId.ti];if(fg)t.code=fg;t.date=new Date().toLocaleString();}
-  else if(fg){const ex=s.templates.find(t=>t.code===fg);if(ex)ex.date=new Date().toLocaleString();else s.templates.push({code:fg,name:fg,date:new Date().toLocaleString()});}
+  const formData={};document.querySelectorAll('#form-body [data-param]').forEach(inp=>{if(inp.value)formData[inp.dataset.param]=inp.value;});
+  if(curPCCId&&curPCCId.ti!==undefined){const t=s.templates[curPCCId.ti];if(fg)t.code=fg;t.formData=formData;t.date=new Date().toLocaleString();}
+  else if(fg){const ex=s.templates.find(t=>t.code===fg);if(ex){ex.formData=formData;ex.date=new Date().toLocaleString();}else s.templates.push({code:fg,name:fg,formData,date:new Date().toLocaleString()});}
   toast('Template updated','&#9998;');renderTpl();setTimeout(()=>showMachine(curM),500);
 }
 function saveRun(){
@@ -1110,7 +1132,7 @@ function saveRun(){
       apiSaveRun(todayStr(),curM,sh,entry.code,ri,entry.runs[ri]);
     }
   }
-  if(fg){const ex=s.templates.find(t=>t.code===fg);if(!ex)s.templates.push({code:fg,name:fg,date:new Date().toLocaleString()});else ex.date=new Date().toLocaleString();}
+  if(fg){const ex=s.templates.find(t=>t.code===fg);if(!ex)s.templates.push({code:fg,name:fg,formData,date:new Date().toLocaleString()});else{ex.formData=formData;ex.date=new Date().toLocaleString();}}
   toast('Saved &#10003;','&#128190;');renderProd();renderTpl();setTimeout(()=>showMachine(curM),500);
 }
 
@@ -1323,37 +1345,35 @@ async function buildCombinedShiftWorkbook(dateStr,shiftKey){
   sws.autoFilter={from:{row:4,column:1},to:{row:4,column:6}};
 
   // ── One detail sheet per machine — every FG run gets its own full audit
-  // section, laid out two-per-row (side by side) rather than stacked. ──
-  const BLOCK_W=5; // columns per run-block: Parameter,Value,(gap/B),Parameter2,Value2
-  // Two-line header: operator name on top (top-left of the block), the FG
-  // code + which run it is directly underneath. Returns rows consumed (2).
+  // section, laid out two-per-row (side by side), matching the reference
+  // layout: Left block = cols 1-5 (Param,Value,Param,Value,gap), a 2-column
+  // blank gap, then the next FG's block starts at column offset 7.
   function writeRunHeader(ws,row,entry,run,ri,off){
     const c1=off+1,c2=off+2,c3=off+3,c4=off+4,c5=off+5;
-    // Line 1 — operator, spanning the whole block
-    ws.mergeCells(row,c1,row,c5);
-    const opCell=ws.getCell(row,c1);
-    opCell.value=`Operator: ${run.operator||'—'}`;
-    [c1,c2,c3,c4,c5].forEach(c=>{
+    // Line 1 — operator name, above everything else
+    ws.mergeCells(row,c1,row,c4);
+    ws.getCell(row,c1).value=`Operator: ${run.operator||'—'}`;
+    [c1,c2,c3,c4].forEach(c=>{
       const cell=ws.getCell(row,c);
       cell.font={bold:true,size:10,color:{argb:XLS_WHITE}};
       cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XLS_NAVY}};
       cell.border=allBorders;
     });
     row++;
-    // Line 2 — FG code + run number, time, status
+    // Line 2 — FG code + run number, Time, Status
     ws.mergeCells(row,c1,row,c2);
-    ws.mergeCells(row,c4,row,c5);
-    const vals2=[`${entry.code||'Blank'} — Run ${ri+1}`,'',`Time: ${run.time||''}`,`Status: ${STATUS_LABEL[run.status]||run.status}`,''];
-    [c1,c2,c3,c4,c5].forEach((c,idx)=>{
+    ws.getCell(row,c1).value=`${entry.code||'Blank'} — Run ${ri+1}`;
+    ws.getCell(row,c3).value=`Time: ${run.time||''}`;
+    ws.getCell(row,c4).value=`Status: ${STATUS_LABEL[run.status]||run.status}`;
+    [c1,c3,c4].forEach(c=>{
       const cell=ws.getCell(row,c);
-      cell.value=vals2[idx];
-      cell.font={bold:idx===0,size:10,color:{argb:XLS_WHITE}};
-      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XLS_NAVY_DARK}};
+      cell.font={size:10,color:{argb:XLS_WHITE}};
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XLS_NAVY}};
       cell.border=allBorders;
     });
   }
   function writeParamSections(ws,row,def,vals,off){
-    const c1=off+1,c2=off+2,c3=off+3,c4=off+4,c5=off+5;
+    const c1=off+1,c2=off+2,c3=off+3,c4=off+4;
     const secs=def.sections.filter(s=>!s.type);
     let i=0,dataStripe=false;
     while(i<secs.length){
@@ -1361,26 +1381,26 @@ async function buildCombinedShiftWorkbook(dateStr,shiftKey){
       ws.mergeCells(row,c1,row,c2);
       styleSectionBar(ws.getRow(row),[c1],L.title);
       ws.getCell(row,c1).value=L.title;
-      if(R){ws.mergeCells(row,c4,row,c5);styleSectionBar(ws.getRow(row),[c4],R.title);ws.getCell(row,c4).value=R.title;}
-      else{[c3,c4,c5].forEach(c=>{ws.getCell(row,c).border=allBorders;});}
+      if(R){styleSectionBar(ws.getRow(row),[c3],R.title);ws.getCell(row,c3).value=R.title;}
       row++;
       const hr=ws.getRow(row);
       hr.getCell(c1).value='Parameter';hr.getCell(c2).value='Value';
-      if(R){hr.getCell(c4).value='Parameter';hr.getCell(c5).value='Value';}
-      styleHeaderRow(hr,R?[c1,c2,c4,c5]:[c1,c2]);
-      if(!R)[c3,c4,c5].forEach(c=>{hr.getCell(c).border=allBorders;});
+      const headCols=[c1,c2];
+      if(R){hr.getCell(c3).value='Parameter';hr.getCell(c4).value='Value';headCols.push(c3,c4);}
+      styleHeaderRow(hr,headCols);
       row++;
       const mr=Math.max(L.rows.length,R?R.rows.length:0);
       for(let ri2=0;ri2<mr;ri2++){
         const l=L.rows[ri2],rv=R&&R.rows[ri2];
         const dr=ws.getRow(row);
         dr.getCell(c1).value=l?l.p:'';dr.getCell(c2).value=l?vals[l.p]||'':'';
-        if(R){dr.getCell(c4).value=rv?rv.p:'';dr.getCell(c5).value=rv?vals[rv.p]||'':'';}
-        styleDataRow(dr,R?[c1,c2,c4,c5]:[c1,c2],dataStripe);
-        if(!R)[c3,c4,c5].forEach(c=>{dr.getCell(c).border=allBorders;});
+        const dataCols=[c1,c2];
+        if(R){dr.getCell(c3).value=rv?rv.p:'';dr.getCell(c4).value=rv?vals[rv.p]||'':'';dataCols.push(c3,c4);}
+        styleDataRow(dr,dataCols,dataStripe);
         row++;
       }
       dataStripe=!dataStripe;
+      ws.getRow(row).height=5;row++; // spacer between section-pairs, same FG
       i+=R?2:1;
     }
     return row;
@@ -1413,16 +1433,20 @@ async function buildCombinedShiftWorkbook(dateStr,shiftKey){
     const entries=day[machine.id][shiftKey];
     const def=FORMS[machine.id]||{title:'PCC '+machine.name.toUpperCase(),sections:[]};
     const ws=wb.addWorksheet(machine.name.slice(0,31));
-    ws.columns=[{width:32},{width:14},{width:32},{width:14},{width:12},{width:3},{width:32},{width:14},{width:32},{width:14},{width:12}];
+    // Block = 5 cols (Param,Value,Param,Value,gap). A 2-column blank gap
+    // separates one FG's block from the next FG's block beside it.
+    ws.columns=[{width:32},{width:14},{width:32},{width:14},{width:12},{width:4},{width:4},{width:32},{width:14},{width:32},{width:14},{width:12}];
     let row=1;
-    ws.mergeCells(row,1,row,11);styleTitleCell(ws.getCell(row,1),def.title);
+    ws.mergeCells(row,1,row,3);styleTitleCell(ws.getCell(row,1),def.title);
+    ws.mergeCells(row,4,row,5);styleTitleCell(ws.getCell(row,4),`${dateLabel} — ${sh.label}`);
     row++;
-    ws.mergeCells(row,1,row,11);styleSubCell(ws.getCell(row,1),`Masterpak · Indevco   •   Form# ${machine.formRef||''}   •   ${dateLabel} — ${sh.label}`);
+    ws.mergeCells(row,1,row,3);styleSubCell(ws.getCell(row,1),'Masterpak · Indevco');
+    ws.mergeCells(row,4,row,5);styleSubCell(ws.getCell(row,4),`Form# ${machine.formRef||''}`);
     row++;
     ws.getRow(row).height=6;row++;
 
     if(!entries.length){
-      ws.mergeCells(row,1,row,11);
+      ws.mergeCells(row,1,row,5);
       const c=ws.getCell(row,1);c.value=`No submission received from ${machine.name} for ${sh.label}`;
       c.font={italic:true,color:{argb:'FF64748B'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:XLS_RED_BG}};
       c.border=allBorders;c.alignment={vertical:'middle'};
@@ -1436,14 +1460,14 @@ async function buildCombinedShiftWorkbook(dateStr,shiftKey){
       for(let idx=0;idx<allRuns.length;idx+=2){
         const L=allRuns[idx],R=allRuns[idx+1];
         writeRunHeader(ws,row,L.entry,L.run,L.ri,0);
-        if(R)writeRunHeader(ws,row,R.entry,R.run,R.ri,6);
+        if(R)writeRunHeader(ws,row,R.entry,R.run,R.ri,7);
         row+=2;
         const lVals=L.run.formData||{},rVals=R?R.run.formData||{}:{};
         const rowAfterL=writeParamSections(ws,row,def,lVals,0);
-        const rowAfterR=R?writeParamSections(ws,row,def,rVals,6):row;
+        const rowAfterR=R?writeParamSections(ws,row,def,rVals,7):row;
         row=Math.max(rowAfterL,rowAfterR);
         const rowAfterLM=writeMaterialSection(ws,row,def,lVals,0);
-        const rowAfterRM=R?writeMaterialSection(ws,row,def,rVals,6):row;
+        const rowAfterRM=R?writeMaterialSection(ws,row,def,rVals,7):row;
         row=Math.max(rowAfterLM,rowAfterRM);
         ws.getRow(row).height=12;row++; // extra breathing room between run-bands
       }
