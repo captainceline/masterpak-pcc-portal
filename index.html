@@ -164,6 +164,8 @@ nav{background:var(--white);border-bottom:1px solid var(--lgray);padding:0 1.75r
 .mat-table td{padding:7px 12px;font-size:12px;border-bottom:1px solid var(--lgray);text-align:center}
 .mat-table td:first-child{text-align:left;color:var(--dgray)}
 .mat-table td input{width:70px;border:none;outline:none;font-size:12px;text-align:center;background:transparent;font-family:inherit}
+.mat-add-row{padding:9px 12px;font-size:12px;font-weight:600;color:var(--blue);cursor:pointer;border-top:1px solid var(--lgray);text-align:left;transition:background .12s}
+.mat-add-row:hover{background:var(--off2)}
 /* MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(3px);z-index:500;display:flex;align-items:center;justify-content:center;padding:1rem}
 .modal{background:#fff;border-radius:16px;max-width:420px;width:100%;padding:2rem;box-shadow:0 20px 60px rgba(0,0,0,.18);text-align:center;max-height:90vh;overflow-y:auto}
@@ -498,7 +500,7 @@ const BASE_URL=getBaseUrl();
 // 1. Deploy the provided Apps Script (Code.gs) as a Web App bound to your Google Sheet.
 // 2. Paste the resulting /exec URL below.
 // Until you do, the site falls back to in-memory data (nothing is saved between reloads).
-const API_URL='https://script.google.com/macros/s/AKfycbzq_5XdzLNNSgGKw3AOAzTP2gbHZHrUREHi_aTKaLQJPwe9Rq1WUSlsjXZGJbxVIEgX/exec';
+const API_URL='PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
 const API_ENABLED=API_URL && !API_URL.startsWith('PASTE_');
 
 // POST body is sent as text/plain to avoid a CORS preflight request, which
@@ -755,14 +757,25 @@ function buildSecHTML(sec){
     </table>
   </div>`;
 }
+let matRowCount=3; // 3 rows are rendered by default per form (indices 0,1,2)
+function matRowHTML(idx){
+  return`<tr><td><input type="text" data-param="MAT_${idx}_NAME" placeholder="Material name" style="width:100%;border:none;outline:none;font-size:12px;background:transparent;font-family:inherit"></td><td><input type="number" data-param="MAT_${idx}_A" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_B" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_C" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_PCT" placeholder="%" min="0" max="100"></td></tr>`;
+}
 function buildMatHTML(mats){
   return`<div class="pcc-tables full"><div class="pcc-table-block">
     <div class="pcc-table-head">MATERIAL</div>
     <table class="mat-table">
       <tr><th>Material</th><th>A</th><th>B</th><th>C</th><th>%</th></tr>
-      ${[0,1,2].map(()=>`<tr><td><input type="text" placeholder="Material name" style="width:100%;border:none;outline:none;font-size:12px;background:transparent;font-family:inherit"></td><td><input type="number" placeholder=""></td><td><input type="number" placeholder=""></td><td><input type="number" placeholder=""></td><td><input type="number" placeholder="%" min="0" max="100"></td></tr>`).join('')}
+      <tbody id="mat-table-body">${[0,1,2].map(idx=>matRowHTML(idx)).join('')}</tbody>
     </table>
+    <div class="mat-add-row" onclick="addMaterialRow()">&#10011; Add material</div>
   </div></div>`;
+}
+function addMaterialRow(){
+  const tbody=document.getElementById('mat-table-body');
+  if(!tbody)return;
+  tbody.insertAdjacentHTML('beforeend',matRowHTML(matRowCount));
+  matRowCount++;
 }
 
 // ══════════════════════════════════════════
@@ -801,6 +814,7 @@ function signIn(){
   const role=document.getElementById('si-role').value;
   if(!email){toast('Enter your email','&#9888;');return;}
   currentUser={email,name:email.split('@')[0],role};
+  saveSession();
   document.getElementById('nav-email').textContent=email;
   document.getElementById('nav-email').style.display='inline';
   document.getElementById('signin-btn').style.display='none';
@@ -813,6 +827,7 @@ function signUp(){
   const name=document.getElementById('su-name').value.trim(),email=document.getElementById('su-email').value.trim();
   if(!name||!email){toast('Please fill all fields','&#9888;');return;}
   currentUser={email,name,role:signupRole};
+  saveSession();
   document.getElementById('nav-email').textContent=email;
   document.getElementById('nav-email').style.display='inline';
   document.getElementById('signin-btn').style.display='none';
@@ -823,12 +838,31 @@ function signUp(){
 }
 function signOut(){
   currentUser=null;
+  clearSession();
   document.getElementById('nav-email').style.display='none';
   document.getElementById('nav-role').style.display='none';
   document.getElementById('nav-reports').style.display='none';
   document.getElementById('signin-btn').style.display='inline';
   document.getElementById('signout-btn').style.display='none';
   showPage('auth');
+}
+// ── Session persistence ──
+// Keeps the person signed in across page loads (e.g. scanning a QR code
+// opens the page fresh in the browser, which used to wipe the in-memory
+// session and silently sign them out).
+const SESSION_KEY='pcc_session';
+function saveSession(){try{localStorage.setItem(SESSION_KEY,JSON.stringify(currentUser));}catch(e){}}
+function clearSession(){try{localStorage.removeItem(SESSION_KEY);}catch(e){}}
+function restoreSession(){
+  let saved=null;
+  try{saved=JSON.parse(localStorage.getItem(SESSION_KEY));}catch(e){}
+  if(!saved||!saved.email)return;
+  currentUser=saved;
+  document.getElementById('nav-email').textContent=saved.email;
+  document.getElementById('nav-email').style.display='inline';
+  document.getElementById('signin-btn').style.display='none';
+  document.getElementById('signout-btn').style.display='inline';
+  applyRoleUI();
 }
 
 // ══════════════════════════════════════════
@@ -967,7 +1001,7 @@ function renderTpl(){
     </div>`).join('');
 }
 function runTpl(i){const t=getMS(curM).templates[i];curMode='run';addProd(t.code,t.code,'tpl');}
-function editTpl(i){const t=getMS(curM).templates[i];curMode='edit';curPCCId={ti:i};openPCC(t.code,false);document.getElementById('main-btn').textContent='&#128190; Save';}
+function editTpl(i){const t=getMS(curM).templates[i];curMode='edit';curPCCId={ti:i};openPCC(t.code,false);document.getElementById('main-btn').textContent='Save';}
 function delTpl(i){getMS(curM).templates.splice(i,1);renderTpl();toast('Deleted','&#128465;');}
 
 function addProd(code,name,src){
@@ -1046,9 +1080,10 @@ function openPCC(code,isBlank){
   document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('f-op').value=currentUser?currentUser.name:'';document.getElementById('f-wo').value='';document.getElementById('f-name').value='';
   document.getElementById('f-shift').value=getCurrentShift();
+  matRowCount=3;
   document.getElementById('form-body').innerHTML=buildFormHTML(curM);
   const btn=document.getElementById('main-btn');
-  btn.textContent=curMode==='edit'?'&#128190; Save':curMode==='blank'?'&#128190; Save and Run':'&#9654; Run';
+  btn.textContent=curMode==='edit'?'Save':curMode==='blank'?'Save and Run':'Run';
   showPage('pcc');
 }
 function syncFG(){const v=document.getElementById('pcc-fg-topbar').value;document.getElementById('pcc-doc-fg').textContent=v||'—';document.getElementById('f-fg').value=v;}
@@ -1287,90 +1322,130 @@ async function buildCombinedShiftWorkbook(dateStr,shiftKey){
   });
   sws.autoFilter={from:{row:4,column:1},to:{row:4,column:6}};
 
-  // ── One detail sheet per machine ──
+  // ── One detail sheet per machine — every FG run gets its own full audit
+  // section, laid out two-per-row (side by side) rather than stacked. ──
+  const BLOCK_W=5; // columns per run-block: Parameter,Value,(gap/B),Parameter2,Value2
+  // Two-line header: operator name on top (top-left of the block), the FG
+  // code + which run it is directly underneath. Returns rows consumed (2).
+  function writeRunHeader(ws,row,entry,run,ri,off){
+    const c1=off+1,c2=off+2,c3=off+3,c4=off+4,c5=off+5;
+    // Line 1 — operator, spanning the whole block
+    ws.mergeCells(row,c1,row,c5);
+    const opCell=ws.getCell(row,c1);
+    opCell.value=`Operator: ${run.operator||'—'}`;
+    [c1,c2,c3,c4,c5].forEach(c=>{
+      const cell=ws.getCell(row,c);
+      cell.font={bold:true,size:10,color:{argb:XLS_WHITE}};
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XLS_NAVY}};
+      cell.border=allBorders;
+    });
+    row++;
+    // Line 2 — FG code + run number, time, status
+    ws.mergeCells(row,c1,row,c2);
+    ws.mergeCells(row,c4,row,c5);
+    const vals2=[`${entry.code||'Blank'} — Run ${ri+1}`,'',`Time: ${run.time||''}`,`Status: ${STATUS_LABEL[run.status]||run.status}`,''];
+    [c1,c2,c3,c4,c5].forEach((c,idx)=>{
+      const cell=ws.getCell(row,c);
+      cell.value=vals2[idx];
+      cell.font={bold:idx===0,size:10,color:{argb:XLS_WHITE}};
+      cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XLS_NAVY_DARK}};
+      cell.border=allBorders;
+    });
+  }
+  function writeParamSections(ws,row,def,vals,off){
+    const c1=off+1,c2=off+2,c3=off+3,c4=off+4,c5=off+5;
+    const secs=def.sections.filter(s=>!s.type);
+    let i=0,dataStripe=false;
+    while(i<secs.length){
+      const L=secs[i],R=!secs[i].full&&secs[i+1]&&!secs[i+1].type&&!secs[i+1].full?secs[i+1]:null;
+      ws.mergeCells(row,c1,row,c2);
+      styleSectionBar(ws.getRow(row),[c1],L.title);
+      ws.getCell(row,c1).value=L.title;
+      if(R){ws.mergeCells(row,c4,row,c5);styleSectionBar(ws.getRow(row),[c4],R.title);ws.getCell(row,c4).value=R.title;}
+      else{[c3,c4,c5].forEach(c=>{ws.getCell(row,c).border=allBorders;});}
+      row++;
+      const hr=ws.getRow(row);
+      hr.getCell(c1).value='Parameter';hr.getCell(c2).value='Value';
+      if(R){hr.getCell(c4).value='Parameter';hr.getCell(c5).value='Value';}
+      styleHeaderRow(hr,R?[c1,c2,c4,c5]:[c1,c2]);
+      if(!R)[c3,c4,c5].forEach(c=>{hr.getCell(c).border=allBorders;});
+      row++;
+      const mr=Math.max(L.rows.length,R?R.rows.length:0);
+      for(let ri2=0;ri2<mr;ri2++){
+        const l=L.rows[ri2],rv=R&&R.rows[ri2];
+        const dr=ws.getRow(row);
+        dr.getCell(c1).value=l?l.p:'';dr.getCell(c2).value=l?vals[l.p]||'':'';
+        if(R){dr.getCell(c4).value=rv?rv.p:'';dr.getCell(c5).value=rv?vals[rv.p]||'':'';}
+        styleDataRow(dr,R?[c1,c2,c4,c5]:[c1,c2],dataStripe);
+        if(!R)[c3,c4,c5].forEach(c=>{dr.getCell(c).border=allBorders;});
+        row++;
+      }
+      dataStripe=!dataStripe;
+      i+=R?2:1;
+    }
+    return row;
+  }
+  function writeMaterialSection(ws,row,def,vals,off){
+    const matSec=def.sections.find(s=>s.type==='material');
+    if(!matSec)return row;
+    const c1=off+1,c2=off+2,c3=off+3,c4=off+4,c5=off+5;
+    const foundIdx=Object.keys(vals).filter(k=>/^MAT_\d+_NAME$/.test(k)).map(k=>parseInt(k.match(/^MAT_(\d+)_NAME$/)[1])).sort((a,b)=>a-b);
+    const matRows=foundIdx.length?foundIdx:[0,1,2];
+    ws.mergeCells(row,c1,row,c5);
+    styleSectionBar(ws.getRow(row),[c1],'MATERIAL');
+    row++;
+    const mhr=ws.getRow(row);
+    [c1,c2,c3,c4,c5].forEach((c,idx)=>{mhr.getCell(c).value=['Material','A','B','C','%'][idx];});
+    styleHeaderRow(mhr,[c1,c2,c3,c4,c5]);
+    row++;
+    matRows.forEach((idx,m2)=>{
+      const mrow=ws.getRow(row);
+      [c1,c2,c3,c4,c5].forEach((c,ci)=>{
+        mrow.getCell(c).value=[vals[`MAT_${idx}_NAME`]||'',vals[`MAT_${idx}_A`]||'',vals[`MAT_${idx}_B`]||'',vals[`MAT_${idx}_C`]||'',vals[`MAT_${idx}_PCT`]||''][ci];
+      });
+      styleDataRow(mrow,[c1,c2,c3,c4,c5],m2%2===1);
+      row++;
+    });
+    return row;
+  }
+
   MACHINES.filter(m=>m.active).forEach(machine=>{
     const entries=day[machine.id][shiftKey];
     const def=FORMS[machine.id]||{title:'PCC '+machine.name.toUpperCase(),sections:[]};
     const ws=wb.addWorksheet(machine.name.slice(0,31));
-    ws.columns=[{width:32},{width:14},{width:32},{width:14},{width:12}];
+    ws.columns=[{width:32},{width:14},{width:32},{width:14},{width:12},{width:3},{width:32},{width:14},{width:32},{width:14},{width:12}];
     let row=1;
-    ws.mergeCells(`A${row}:C${row}`);styleTitleCell(ws.getCell(`A${row}`,),def.title);
-    ws.mergeCells(`D${row}:E${row}`);styleTitleCell(ws.getCell(`D${row}`),`${dateLabel} — ${sh.label}`);
+    ws.mergeCells(row,1,row,11);styleTitleCell(ws.getCell(row,1),def.title);
     row++;
-    ws.mergeCells(`A${row}:C${row}`);styleSubCell(ws.getCell(`A${row}`),'Masterpak · Indevco');
-    ws.mergeCells(`D${row}:E${row}`);styleSubCell(ws.getCell(`D${row}`),`Form# ${machine.formRef||''}`);
+    ws.mergeCells(row,1,row,11);styleSubCell(ws.getCell(row,1),`Masterpak · Indevco   •   Form# ${machine.formRef||''}   •   ${dateLabel} — ${sh.label}`);
     row++;
     ws.getRow(row).height=6;row++;
 
     if(!entries.length){
-      ws.mergeCells(`A${row}:E${row}`);
-      const c=ws.getCell(`A${row}`);c.value=`No submission received from ${machine.name} for ${sh.label}`;
+      ws.mergeCells(row,1,row,11);
+      const c=ws.getCell(row,1);c.value=`No submission received from ${machine.name} for ${sh.label}`;
       c.font={italic:true,color:{argb:'FF64748B'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:XLS_RED_BG}};
       c.border=allBorders;c.alignment={vertical:'middle'};
       row++;
     } else {
-      entries.forEach(entry=>{
-        entry.runs.forEach((run,ri)=>{
-          const rr=ws.getRow(row);
-          rr.values=[`${entry.code||'Blank'} — Run ${ri+1}`,`Operator: ${run.operator||''}`,`Time: ${run.time||''}`,`Status: ${STATUS_LABEL[run.status]||run.status}`,''];
-          ws.mergeCells(`A${row}:B${row}`);
-          [1,2,3,4].forEach(c=>{
-            const cell=rr.getCell(c);
-            cell.font={bold:c===1,size:10,color:{argb:'FF1B3B7A'}};
-            cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:XLS_BLUE_BG}};
-            cell.border=allBorders;
-          });
-          row++;
-        });
-      });
-      ws.getRow(row).height=6;row++;
-
-      const vals=entries[0]&&entries[0].runs[0]?entries[0].runs[0].formData||{}:{};
-      const secs=def.sections.filter(s=>!s.type);
-      let i=0;
-      let dataStripe=false;
-      while(i<secs.length){
-        const L=secs[i],R=!secs[i].full&&secs[i+1]&&!secs[i+1].type&&!secs[i+1].full?secs[i+1]:null;
-        ws.mergeCells(`A${row}:B${row}`);
-        styleSectionBar(ws.getRow(row),[1],L.title);
-        ws.getCell(`A${row}`).value=L.title;
-        if(R){ws.mergeCells(`D${row}:E${row}`);styleSectionBar(ws.getRow(row),[4],R.title);ws.getCell(`D${row}`).value=R.title;}
-        else{['C','D','E'].forEach(col=>{const c=ws.getCell(`${col}${row}`);c.border=allBorders;});}
-        row++;
-        const hr=ws.getRow(row);
-        hr.values=['Parameter','Value',R?'Parameter':'',R?'Value':'',''];
-        styleHeaderRow(hr,R?[1,2,3,4]:[1,2]);
-        if(!R)[3,4,5].forEach(c=>{const cell=hr.getCell(c);cell.border=allBorders;});
-        row++;
-        const mr=Math.max(L.rows.length,R?R.rows.length:0);
-        for(let ri2=0;ri2<mr;ri2++){
-          const l=L.rows[ri2],rv=R&&R.rows[ri2];
-          const dr=ws.getRow(row);
-          dr.values=[l?l.p:'',l?vals[l.p]||'':'',rv?rv.p:'',rv?vals[rv.p]||'':'',''];
-          styleDataRow(dr,R?[1,2,3,4]:[1,2],dataStripe);
-          if(!R)[3,4,5].forEach(c=>{const cell=dr.getCell(c);cell.border=allBorders;});
-          row++;
-        }
-        dataStripe=!dataStripe;
-        ws.getRow(row).height=6;row++;
-        i+=R?2:1;
-      }
-
-      const matSec=def.sections.find(s=>s.type==='material');
-      if(matSec){
-        ws.mergeCells(`A${row}:E${row}`);
-        styleSectionBar(ws.getRow(row),[1],'MATERIAL');
-        row++;
-        const mhr=ws.getRow(row);
-        mhr.values=['Material','A','B','C','%'];
-        styleHeaderRow(mhr,[1,2,3,4,5]);
-        row++;
-        for(let m2=0;m2<3;m2++){
-          const mrow=ws.getRow(row);
-          mrow.values=['','','','',''];
-          styleDataRow(mrow,[1,2,3,4,5],m2%2===1);
-          row++;
-        }
+      // Every FG code, and every run within it, gets its own labeled audit
+      // section — two side by side per row-band so it reads left-to-right
+      // instead of one long stack.
+      const allRuns=[];
+      entries.forEach(entry=>entry.runs.forEach((run,ri)=>allRuns.push({entry,run,ri})));
+      for(let idx=0;idx<allRuns.length;idx+=2){
+        const L=allRuns[idx],R=allRuns[idx+1];
+        writeRunHeader(ws,row,L.entry,L.run,L.ri,0);
+        if(R)writeRunHeader(ws,row,R.entry,R.run,R.ri,6);
+        row+=2;
+        const lVals=L.run.formData||{},rVals=R?R.run.formData||{}:{};
+        const rowAfterL=writeParamSections(ws,row,def,lVals,0);
+        const rowAfterR=R?writeParamSections(ws,row,def,rVals,6):row;
+        row=Math.max(rowAfterL,rowAfterR);
+        const rowAfterLM=writeMaterialSection(ws,row,def,lVals,0);
+        const rowAfterRM=R?writeMaterialSection(ws,row,def,rVals,6):row;
+        row=Math.max(rowAfterLM,rowAfterRM);
+        ws.getRow(row).height=12;row++; // extra breathing room between run-bands
       }
     }
   });
@@ -1435,6 +1510,7 @@ function toast(msg,icon='&#10003;'){
   const el=document.getElementById('toast');el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2800);
 }
 
+restoreSession();
 buildMachinesGrid();
 // On first load, check if the URL already points at a specific machine
 // (i.e. someone scanned a QR code) and jump straight there.
