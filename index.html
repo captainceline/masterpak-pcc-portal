@@ -18,8 +18,8 @@
   --shadow-md:0 4px 24px rgba(0,0,0,.12);--radius:12px;--radius-sm:8px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off);color:var(--dark);min-height:100vh}
-nav{background:var(--white);border-bottom:1px solid var(--lgray);padding:0 1.75rem;display:flex;align-items:center;height:60px;gap:1.5rem;position:sticky;top:0;z-index:200;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--off);color:var(--dark);min-height:100vh;overflow-x:hidden}
+nav{background:var(--white);border-bottom:1px solid var(--lgray);padding:.6rem 1.75rem;display:flex;flex-wrap:wrap;align-items:center;min-height:60px;gap:.6rem 1.5rem;position:sticky;top:0;z-index:200;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .nav-logo{display:flex;align-items:center;cursor:pointer;height:36px}
 .nav-logo img{height:32px;width:auto}
 .nav-links{display:flex;gap:2px;margin-left:auto}
@@ -252,7 +252,15 @@ nav{background:var(--white);border-bottom:1px solid var(--lgray);padding:0 1.75r
 .rb-partial{background:#FEF3C7;color:#B45309}
 .override-link{font-size:10px;color:var(--gray);text-decoration:underline;cursor:pointer;margin-top:4px;display:inline-block}
 @media(max-width:900px){.machines-grid{grid-template-columns:repeat(2,1fr)}.qr-grid{grid-template-columns:repeat(2,1fr)}.pcc-tables{grid-template-columns:1fr}}
-@media(max-width:600px){.machines-grid{grid-template-columns:1fr}.hero{flex-direction:column}.hero-graphic{display:none}.pcc-header-fields{grid-template-columns:1fr 1fr}.role-pick{grid-template-columns:1fr}.report-card{flex-direction:column;align-items:flex-start}}
+@media(max-width:600px){.machines-grid{grid-template-columns:1fr}.hero{flex-direction:column}.hero-graphic{display:none}.pcc-header-fields{grid-template-columns:1fr 1fr}.role-pick{grid-template-columns:1fr}.report-card{flex-direction:column;align-items:flex-start}
+nav{padding:.5rem 1rem;gap:.5rem .6rem}
+.nav-links{margin-left:0}
+.nav-links a{padding:5px 8px;font-size:12px}
+.nav-email-tag{display:none}
+.nav-user{gap:6px}
+.mp-header-inner,.mp-body,.reports-wrap{padding-left:1rem;padding-right:1rem}
+.qr-grid{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
@@ -526,17 +534,33 @@ function apiDeleteRun(dateStr,machineId,shiftKey,code,runIndex){
 // Rebuilds PROD_HISTORY from the flat rows the Sheet returns
 function loadProductionFromSheet(){
   return apiGetAll().then(rows=>{
-    if(!rows.length)return;
+    // Group rows by date+machine+shift so each combination can be rebuilt
+    // fresh from scratch — a merge-only approach would never reflect a run
+    // that was deleted on another device.
+    const grouped={};
     rows.forEach(row=>{
-      const day=getHistoryDay(row.date);
-      if(!day[row.machineId])return;
-      const shiftArr=day[row.machineId][row.shift];
-      let entry=shiftArr.find(e=>e.code===row.code);
-      if(!entry){entry={code:row.code==='Blank'?'':row.code,name:row.code,runs:[]};shiftArr.push(entry);}
-      const ri=Number(row.runIndex)||0;
-      let formData=row.formData;
-      if(typeof formData==='string'){try{formData=JSON.parse(formData);}catch(e){formData={};}}
-      entry.runs[ri]={status:row.status,time:row.time||'',operator:row.operator||'',formData:formData||{},saved:row.saved===true||row.saved==='TRUE'};
+      const key=`${row.date}|${row.machineId}|${row.shift}`;
+      (grouped[key]=grouped[key]||[]).push(row);
+    });
+    const datesTouched=new Set(rows.map(r=>r.date));
+    datesTouched.add(todayStr()); // always resync today, even if the sheet now has zero rows for it
+    datesTouched.forEach(dateStr=>{
+      const day=getHistoryDay(dateStr);
+      MACHINES.forEach(m=>{
+        ['shift1','shift2','shift3'].forEach(sh=>{
+          const matching=grouped[`${dateStr}|${m.id}|${sh}`]||[];
+          const entries=[];
+          matching.forEach(row=>{
+            let entry=entries.find(e=>e.code===row.code);
+            if(!entry){entry={code:row.code==='Blank'?'':row.code,name:row.code,runs:[]};entries.push(entry);}
+            const ri=Number(row.runIndex)||0;
+            let formData=row.formData;
+            if(typeof formData==='string'){try{formData=JSON.parse(formData);}catch(e){formData={};}}
+            entry.runs[ri]={status:row.status,time:row.time||'',operator:row.operator||'',formData:formData||{},saved:row.saved===true||row.saved==='TRUE'};
+          });
+          day[m.id][sh]=entries;
+        });
+      });
     });
     if(document.getElementById('page-machine').classList.contains('active'))renderProd();
     if(document.getElementById('page-reports').classList.contains('active'))renderReports();
@@ -1545,7 +1569,13 @@ window.addEventListener('popstate',()=>{ if(!handleRoute()) showPage('home'); })
 // Nothing is seeded/faked anymore — until API_URL is set, the site simply
 // starts empty and only holds data for the current browser session.
 loadProductionFromSheet();
-if(!API_ENABLED)console.warn('Google Sheet API_URL is not set — running with in-memory data only (nothing will be saved between reloads). See the deployment guide.');
+if(API_ENABLED){
+  // Keep polling so changes made on another device (e.g. a phone on the
+  // shop floor) show up here automatically, without needing a manual reload.
+  setInterval(loadProductionFromSheet,15000);
+} else {
+  console.warn('Google Sheet API_URL is not set — running with in-memory data only (nothing will be saved between reloads, and nothing syncs across devices). See the deployment guide.');
+}
 </script>
 </body>
 </html>
