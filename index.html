@@ -131,6 +131,7 @@ nav{background:var(--white);border-bottom:1px solid var(--lgray);padding:.6rem 1
 .pcc-fg-input{font-size:15px;font-weight:600;color:var(--dark);border:1px solid var(--lgray);border-radius:6px;padding:6px 12px;outline:none;text-align:center;min-width:130px}
 .pcc-fg-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(29,78,216,.08)}
 .pcc-topbar-acts{display:flex;gap:8px;align-items:center}
+.pcc-page-pad{background:var(--off);padding:1rem 1.5rem 2rem}
 .pcc-doc{background:#fff;margin:1.25rem 1.5rem 2rem;border:1px solid var(--lgray);border-radius:var(--radius);overflow:hidden}
 .pcc-doc-header{padding:1.25rem 1.5rem;border-bottom:1px solid var(--lgray)}
 .pcc-doc-row{display:flex;justify-content:space-between;align-items:flex-start}
@@ -260,6 +261,11 @@ nav{padding:.5rem 1rem;gap:.5rem .6rem}
 .nav-user{gap:6px}
 .mp-header-inner,.mp-body,.reports-wrap{padding-left:1rem;padding-right:1rem}
 .qr-grid{grid-template-columns:1fr}
+.pcc-page-pad{padding-left:.4rem;padding-right:.4rem}
+.pcc-doc{margin-left:0;margin-right:0;border-radius:10px}
+.pcc-table th,.pcc-table td{padding:7px 8px}
+.mat-table th,.mat-table td{padding:6px 6px}
+.pcc-doc-header{padding:1rem .9rem}
 }
 </style>
 </head>
@@ -384,7 +390,7 @@ nav{padding:.5rem 1rem;gap:.5rem .6rem}
         <button class="btn btn-navy" id="main-btn" onclick="handleBtn()">&#9654; Run</button>
       </div>
     </div>
-    <div style="background:var(--off);padding:1rem 1.5rem 2rem">
+    <div class="pcc-page-pad">
       <div class="pcc-doc">
         <div class="pcc-doc-header">
           <div class="pcc-doc-row">
