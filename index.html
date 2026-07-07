@@ -879,7 +879,8 @@ function signIn(){
   document.getElementById('signout-btn').style.display='inline';
   applyRoleUI();
   toast('Signed in as '+({operator:'Operator',teamleader:'Team Leader',manager:'Manager'})[role],'&#128075;');
-  showPage('home');
+  if(pendingRoute){const mid=pendingRoute;pendingRoute=null;showMachine(mid);}
+  else showPage('home');
 }
 function signUp(){
   const name=document.getElementById('su-name').value.trim(),email=document.getElementById('su-email').value.trim();
@@ -892,7 +893,8 @@ function signUp(){
   document.getElementById('signout-btn').style.display='inline';
   applyRoleUI();
   toast('Welcome, '+name,'&#127881;');
-  showPage('home');
+  if(pendingRoute){const mid=pendingRoute;pendingRoute=null;showMachine(mid);}
+  else showPage('home');
 }
 function signOut(){
   currentUser=null;
@@ -1020,13 +1022,22 @@ function machineDeepLink(slug){
 // Reads the current URL hash and, if it points at a machine (#/m/<slug>),
 // jumps straight to that machine's PCC page — this is what makes scanning a
 // QR code land the person directly on the machine they scanned.
+let pendingRoute=null; // machine id to open once the person signs in, if a QR scan brought them here
 function handleRoute(){
   const hash=window.location.hash||'';
   const match=hash.match(/^#\/m\/([a-zA-Z0-9-]+)/);
   if(match){
     const slug=match[1];
     const m=MACHINES.find(x=>x.slug===slug);
-    if(m){showMachine(m.id,true);return true;}
+    if(m){
+      if(!currentUser){
+        // Not signed in yet — hold off opening the machine until they log in.
+        pendingRoute=m.id;
+        showPage('auth');
+        return true;
+      }
+      showMachine(m.id,true);return true;
+    }
   }
   return false;
 }
