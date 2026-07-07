@@ -786,14 +786,14 @@ function buildSecHTML(sec,vals){
     <div class="pcc-table-head">${sec.title}</div>
     <table class="pcc-table">
       <tr><th>Parameter</th><th>Value</th></tr>
-      ${sec.rows.map(r=>`<tr><td>${r.p}</td><td><input type="text" data-param="${r.p}" value="${escAttr(vals[r.p])}" placeholder=""></td></tr>`).join('')}
+      ${sec.rows.map(r=>`<tr><td>${r.p}</td><td><input type="text" data-param="${r.p}" value="${escAttr(vals[r.p])}" placeholder="" enterkeyhint="next"></td></tr>`).join('')}
     </table>
   </div>`;
 }
 let matRowCount=3; // 3 rows are rendered by default per form (indices 0,1,2)
 function matRowHTML(idx,vals){
   vals=vals||{};
-  return`<tr><td><input type="text" data-param="MAT_${idx}_NAME" value="${escAttr(vals['MAT_'+idx+'_NAME'])}" placeholder="Material name" style="width:100%;border:none;outline:none;font-size:12px;background:transparent;font-family:inherit"></td><td><input type="number" data-param="MAT_${idx}_A" value="${escAttr(vals['MAT_'+idx+'_A'])}" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_B" value="${escAttr(vals['MAT_'+idx+'_B'])}" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_C" value="${escAttr(vals['MAT_'+idx+'_C'])}" placeholder=""></td><td><input type="number" data-param="MAT_${idx}_PCT" value="${escAttr(vals['MAT_'+idx+'_PCT'])}" placeholder="%" min="0" max="100"></td></tr>`;
+  return`<tr><td><input type="text" data-param="MAT_${idx}_NAME" value="${escAttr(vals['MAT_'+idx+'_NAME'])}" placeholder="Material name" enterkeyhint="next" style="width:100%;border:none;outline:none;font-size:12px;background:transparent;font-family:inherit"></td><td><input type="number" data-param="MAT_${idx}_A" value="${escAttr(vals['MAT_'+idx+'_A'])}" placeholder="" enterkeyhint="next"></td><td><input type="number" data-param="MAT_${idx}_B" value="${escAttr(vals['MAT_'+idx+'_B'])}" placeholder="" enterkeyhint="next"></td><td><input type="number" data-param="MAT_${idx}_C" value="${escAttr(vals['MAT_'+idx+'_C'])}" placeholder="" enterkeyhint="next"></td><td><input type="number" data-param="MAT_${idx}_PCT" value="${escAttr(vals['MAT_'+idx+'_PCT'])}" placeholder="%" min="0" max="100" enterkeyhint="next"></td></tr>`;
 }
 function buildMatHTML(mats,vals){
   vals=vals||{};
@@ -1573,6 +1573,18 @@ function toast(msg,icon='&#10003;'){
 
 restoreSession();
 buildMachinesGrid();
+// Pressing Enter (or tapping "Next" on a mobile keyboard) while filling in
+// the PCC form jumps to the next field instead of doing nothing/submitting.
+document.getElementById('form-body').addEventListener('keydown',function(e){
+  if(e.key!=='Enter')return;
+  e.preventDefault();
+  const fields=Array.from(document.querySelectorAll('#form-body [data-param]'));
+  const idx=fields.indexOf(e.target);
+  if(idx===-1)return;
+  const next=fields[idx+1];
+  if(next){next.focus();if(next.select)next.select();}
+  else{e.target.blur();}
+});
 // On first load, check if the URL already points at a specific machine
 // (i.e. someone scanned a QR code) and jump straight there.
 handleRoute();
