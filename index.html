@@ -1145,7 +1145,7 @@ function openPCC(code,isBlank,vals,opName){
   showPage('pcc');
 }
 function syncFG(){const v=document.getElementById('pcc-fg-topbar').value;document.getElementById('pcc-doc-fg').textContent=v||'—';document.getElementById('f-fg').value=v;}
-function openBlank(){curMode='blank';curPCCId=null;addProd('','Blank PCC','blank');}
+function openBlank(){curMode='blank';curPCCId=null;openPCC('',true);}
 function goBack(){showMachine(curM);}
 function handleBtn(){(curPCCId&&curPCCId.ti!==undefined)?saveEdit():saveRun();}
 
@@ -1162,12 +1162,25 @@ function saveRun(){
   const formData={};document.querySelectorAll('#form-body [data-param]').forEach(inp=>{if(inp.value)formData[inp.dataset.param]=inp.value;});
   const opName=document.getElementById('f-op').value;
   if(curPCCId&&curPCCId.pi!==undefined){
+    // An existing run (reopened, from search, or from a template) — update it in place.
     const{shift:sh,pi,ri}=curPCCId;const entry=shifts[sh]?.[pi];
     if(entry){
       entry.runs[ri].saved=true;entry.runs[ri].formData=formData;entry.runs[ri].operator=opName;
       if(fg&&!entry.code){entry.code=fg;entry.name=fg;}
       apiSaveRun(todayStr(),curM,sh,entry.code,ri,entry.runs[ri]);
     }
+  } else {
+    // A brand-new blank PCC that was never registered as a run yet — create
+    // and save it in one shot, now that the real FG code is known. This is
+    // what avoids ever writing a placeholder "Blank" row to the sheet.
+    shifts[shift].forEach(e=>e.runs.forEach(r=>{if(r.status==='inprogress')r.status='completed';}));
+    const run={status:'inprogress',time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),formData,operator:opName,saved:true};
+    let entry=shifts[shift].find(p=>p.code===fg);
+    let ri;
+    if(entry){entry.runs.push(run);ri=entry.runs.length-1;}
+    else{shifts[shift].push({code:fg,name:fg||'Blank PCC',runs:[run]});entry=shifts[shift][shifts[shift].length-1];ri=0;}
+    curPCCId={shift,pi:shifts[shift].indexOf(entry),ri};
+    apiSaveRun(todayStr(),curM,shift,entry.code,ri,run);
   }
   if(fg){const ex=s.templates.find(t=>t.code===fg);if(!ex)s.templates.push({code:fg,name:fg,formData,date:new Date().toLocaleString()});else{ex.formData=formData;ex.date=new Date().toLocaleString();}}
   toast('Saved &#10003;','&#128190;');renderProd();renderTpl();setTimeout(()=>showMachine(curM),500);
