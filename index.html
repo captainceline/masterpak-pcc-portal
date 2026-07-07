@@ -922,7 +922,14 @@ function getHistoryDay(dateStr){
   MACHINES.forEach(m=>{if(!PROD_HISTORY[dateStr][m.id])PROD_HISTORY[dateStr][m.id]={shift1:[],shift2:[],shift3:[]};});
   return PROD_HISTORY[dateStr];
 }
-function todayStr(){return new Date().toISOString().split('T')[0];}
+// Formats a Date using its LOCAL year/month/day — never use .toISOString()
+// for this, since that converts to UTC first and can shift the date by one
+// depending on the local timezone offset and time of day.
+function localDateStr(d){
+  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function todayStr(){return localDateStr(new Date());}
 
 const MS={};
 function getMS(m){
@@ -1129,7 +1136,7 @@ function openPCC(code,isBlank,vals,opName){
   document.getElementById('pcc-fg-topbar').value=fg;
   document.getElementById('pcc-doc-fg').textContent=fg||'—';
   document.getElementById('f-fg').value=fg;
-  document.getElementById('f-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('f-date').value=localDateStr(new Date());
   document.getElementById('f-op').value=opName||(currentUser?currentUser.name:'');document.getElementById('f-wo').value='';document.getElementById('f-name').value='';
   document.getElementById('f-shift').value=getCurrentShift();
   document.getElementById('form-body').innerHTML=buildFormHTML(curM,vals);
@@ -1221,7 +1228,7 @@ function buildCalendar(){
   for(let i=0;i<startOffset;i++)html+='<div class="cal-cell empty"></div>';
   for(let d=1;d<=daysInMonth;d++){
     const dateObj=new Date(y,m,d);
-    const ds=dateObj.toISOString().split('T')[0];
+    const ds=localDateStr(dateObj);
     const hasData=!!PROD_HISTORY[ds];
     const isToday=ds===todayDs;
     const isSelected=ds===reportsSelectedDate;
